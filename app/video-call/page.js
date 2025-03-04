@@ -1,12 +1,13 @@
-//app/video-call/page.js
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 import VideoCallUI from '@/components/VideoCall/VideoCallUI';
 
-export default function VideoCallPage() {
+// Create a separate component that uses useSearchParams
+const VideoCallWithParams = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [roomId, setRoomId] = useState(null);
@@ -33,5 +34,21 @@ export default function VideoCallPage() {
       <h1 className="text-2xl font-bold mb-6 text-center">Video Call</h1>
       <VideoCallUI roomId={roomId} />
     </div>
+  );
+};
+
+// Main page component with Suspense
+export default function VideoCallPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-pink-500" />
+          <p className="mt-4 text-gray-600">Loading video call...</p>
+        </div>
+      </div>
+    }>
+      <VideoCallWithParams />
+    </Suspense>
   );
 }
