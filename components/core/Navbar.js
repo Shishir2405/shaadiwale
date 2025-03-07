@@ -37,7 +37,6 @@ const NavItems = [
   { id: 1, title: "Home", href: "/" },
   { id: 2, title: "Membership", href: "/membership" },
   { id: 3, title: "Contact Us", href: "/contactUs" },
-    { id: 4, title: "H", href: "/h" },
 ];
 
 const UserAvatar = ({ user, size = 8 }) => {

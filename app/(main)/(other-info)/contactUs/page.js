@@ -1,13 +1,33 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MessageSquare, Phone, Send, ArrowRight, MapPin } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { toast } from "@/components/ui/use-toast";
 
 const ContactPage = () => {
   const [hoveredCard, setHoveredCard] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [contentLoading, setContentLoading] = useState(true);
+
+  // Contact information state
+  const [contactInfo, setContactInfo] = useState({
+    indiaHelpline: "0-8144-99-88-77", // Default value
+    uaeHelpline: "+971 525060879", // Default value
+    paymentNumber: "+91 7538895777", // Default value
+    partnershipEmail: "partnership@bharatmatrimony.com", // Default value
+  });
+
   const [formData, setFormData] = useState({
     name: "",
     organization: "",
@@ -18,9 +38,81 @@ const ContactPage = () => {
     address: "",
   });
 
-  const handleSubmit = (e) => {
+  // Fetch contact information from Firebase
+  useEffect(() => {
+    const fetchContactInfo = async () => {
+      try {
+        const contactDocRef = doc(db, "siteContent", "contactInfo");
+        const docSnap = await getDoc(contactDocRef);
+
+        if (docSnap.exists()) {
+          setContactInfo({
+            ...contactInfo,
+            ...docSnap.data(),
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching contact info:", err);
+        // Continue with default values if fetch fails
+      } finally {
+        setContentLoading(false);
+      }
+    };
+
+    fetchContactInfo();
+  }, []);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission
+    setLoading(true);
+
+    try {
+      // Add to business enquiries collection
+      await addDoc(collection(db, "businessEnquiries"), {
+        ...formData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        responded: false,
+        read: false,
+      });
+
+      // Clear form
+      setFormData({
+        name: "",
+        organization: "",
+        business: "",
+        phone: "",
+        email: "",
+        details: "",
+        address: "",
+      });
+
+      // Show success message
+      toast({
+        title: "Enquiry Submitted",
+        description:
+          "Your business enquiry has been successfully submitted. We'll contact you soon.",
+        variant: "success",
+      });
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      toast({
+        title: "Submission Failed",
+        description:
+          "There was an error submitting your enquiry. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,18 +176,26 @@ const ContactPage = () => {
                       <div>
                         <div className="text-sm text-gray-500">INDIA</div>
                         <div className="font-medium text-lg group-hover:text-pink-500 transition-colors">
-                          0-8144-99-88-77
+                          {contentLoading ? (
+                            <div className="h-6 bg-gray-200 animate-pulse rounded w-32"></div>
+                          ) : (
+                            contactInfo.indiaHelpline
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4 group">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 flex items-center justify-center transform transition-transform group-hover:rotate-12">
-                      <MapPin className="w-5 h-5 text-white" />
+                        <MapPin className="w-5 h-5 text-white" />
                       </div>
                       <div>
                         <div className="text-sm text-gray-500">UAE</div>
                         <div className="font-medium text-lg group-hover:text-pink-500 transition-colors">
-                          +971 525060879
+                          {contentLoading ? (
+                            <div className="h-6 bg-gray-200 animate-pulse rounded w-32"></div>
+                          ) : (
+                            contactInfo.uaeHelpline
+                          )}
                         </div>
                       </div>
                     </div>
@@ -118,7 +218,11 @@ const ContactPage = () => {
                       <Phone className="w-5 h-5 text-white" />
                     </div>
                     <div className="font-medium text-lg group-hover:text-green-500 transition-colors">
-                      Call +91 7538895777
+                      {contentLoading ? (
+                        <div className="h-6 bg-gray-200 animate-pulse rounded w-40"></div>
+                      ) : (
+                        <>Call {contactInfo.paymentNumber}</>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -173,35 +277,9 @@ const ContactPage = () => {
                     <Input
                       required
                       name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
                       placeholder="Enter your name"
-                      className="w-full transition-all duration-300 focus:ring-2 focus:ring-pink-500"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Organisation / Company{" "}
-                      <span className="text-pink-500">*</span>
-                    </label>
-                    <Input
-                      required
-                      name="organization"
-                      placeholder="Enter your organization name"
-                      className="w-full transition-all duration-300 focus:ring-2 focus:ring-pink-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Business and Phone */}
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Nature of Business{" "}
-                      <span className="text-pink-500">*</span>
-                    </label>
-                    <Input
-                      required
-                      name="business"
-                      placeholder="Enter nature of business"
                       className="w-full transition-all duration-300 focus:ring-2 focus:ring-pink-500"
                     />
                   </div>
@@ -213,6 +291,8 @@ const ContactPage = () => {
                       required
                       name="phone"
                       type="tel"
+                      value={formData.phone}
+                      onChange={handleInputChange}
                       placeholder="Enter contact number"
                       className="w-full transition-all duration-300 focus:ring-2 focus:ring-pink-500"
                     />
@@ -228,6 +308,8 @@ const ContactPage = () => {
                     required
                     name="email"
                     type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
                     placeholder="Enter your email address"
                     className="w-full transition-all duration-300 focus:ring-2 focus:ring-pink-500"
                   />
@@ -241,6 +323,8 @@ const ContactPage = () => {
                   <Textarea
                     required
                     name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
                     placeholder="Enter your complete address"
                     className="w-full min-h-[100px] transition-all duration-300 focus:ring-2 focus:ring-pink-500"
                   />
@@ -255,6 +339,8 @@ const ContactPage = () => {
                   <Textarea
                     required
                     name="details"
+                    value={formData.details}
+                    onChange={handleInputChange}
                     placeholder="Enter your partnership queries or details"
                     className="w-full min-h-[100px] transition-all duration-300 focus:ring-2 focus:ring-pink-500"
                   />
@@ -262,10 +348,20 @@ const ContactPage = () => {
 
                 <button
                   type="submit"
-                  className="group bg-gradient-to-r from-pink-500 to-purple-500 text-white px-8 py-3 rounded-full hover:shadow-lg transition-all duration-300 flex items-center gap-2"
+                  disabled={loading}
+                  className="group bg-gradient-to-r from-pink-500 to-purple-500 text-white px-8 py-3 rounded-full hover:shadow-lg transition-all duration-300 flex items-center gap-2 disabled:opacity-70"
                 >
-                  <span>Submit Enquiry</span>
-                  <Send className="w-4 h-4 transform transition-transform group-hover:translate-x-1" />
+                  {loading ? (
+                    <>
+                      <span>Submitting...</span>
+                      <span className="animate-spin ml-2">⟳</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Submit Enquiry</span>
+                      <Send className="w-4 h-4 transform transition-transform group-hover:translate-x-1" />
+                    </>
+                  )}
                 </button>
 
                 <div className="pt-4 text-sm">
@@ -273,10 +369,14 @@ const ContactPage = () => {
                     FOR MORE DETAILS, CONTACT
                   </p>
                   <a
-                    href="mailto:partnership@bharatmatrimony.com"
+                    href={`mailto:${contactInfo.partnershipEmail}`}
                     className="text-pink-600 hover:text-pink-700 transition-colors hover:underline"
                   >
-                    partnership@bharatmatrimony.com
+                    {contentLoading ? (
+                      <div className="h-5 bg-gray-200 animate-pulse rounded w-56 inline-block"></div>
+                    ) : (
+                      contactInfo.partnershipEmail
+                    )}
                   </a>
                 </div>
               </form>

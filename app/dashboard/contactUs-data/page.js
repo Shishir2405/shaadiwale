@@ -14,6 +14,7 @@ import {
   Briefcase,
   Building,
   Loader2,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/lib/firebase";
@@ -26,8 +27,180 @@ import {
   doc,
   where,
   serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+// Message Detail Dialog Component
+const MessageDetailDialog = ({ isOpen, onClose, message }) => {
+  const [updating, setUpdating] = useState(false);
+
+  const markAsResponded = async () => {
+    if (!message) return;
+
+    setUpdating(true);
+    try {
+      const collectionName =
+        message.type === "business" ? "businessEnquiries" : "contacts";
+      const docRef = doc(db, collectionName, message.id);
+      await updateDoc(docRef, {
+        responded: true,
+        updatedAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (error) {
+      console.error("Error updating status:", error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  if (!message) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl flex items-center gap-2">
+            {message.type === "business" ? (
+              <Building className="w-5 h-5 text-purple-500" />
+            ) : (
+              <MessageSquare className="w-5 h-5 text-blue-500" />
+            )}
+            {message.type === "business"
+              ? "Business Enquiry"
+              : "Contact Message"}
+          </DialogTitle>
+          <DialogDescription>
+            Submitted on {new Date(message.createdAt).toLocaleString()}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-4 space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500">Name</p>
+              <p className="font-medium">{message.name}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-gray-500">Email</p>
+              <p className="font-medium">{message.email}</p>
+            </div>
+          </div>
+
+          {message.type === "business" && (
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Organization</p>
+                  <p className="font-medium">{message.organization}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Business Type</p>
+                  <p className="font-medium">{message.business}</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Phone</p>
+                  <p className="font-medium">{message.phone}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p
+                    className={`font-medium ${
+                      message.responded ? "text-green-600" : "text-amber-600"
+                    }`}
+                  >
+                    {message.responded ? "Responded" : "Pending Response"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">Address</p>
+                <p className="font-medium">{message.address}</p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">
+                  Partnership Details/Queries
+                </p>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p>{message.details}</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {message.type === "general" && (
+            <>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Subject</p>
+                  <p className="font-medium">{message.subject}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p
+                    className={`font-medium ${
+                      message.responded ? "text-green-600" : "text-amber-600"
+                    }`}
+                  >
+                    {message.responded ? "Responded" : "Pending Response"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm text-gray-500">Message</p>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p>{message.message}</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+            {!message.responded && (
+              <button
+                onClick={markAsResponded}
+                disabled={updating}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              >
+                {updating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Mark as Responded
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const StatCard = ({ title, value, icon: Icon, color }) => (
   <motion.div
@@ -115,6 +288,8 @@ const ContactDashboard = () => {
     direction: "desc",
   });
   const [activeTab, setActiveTab] = useState("general");
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   useEffect(() => {
     let unsubscribeContacts;
@@ -200,6 +375,36 @@ const ContactDashboard = () => {
     }
   };
 
+  const handleViewDetails = async (id, type) => {
+    try {
+      const collectionName =
+        type === "business" ? "businessEnquiries" : "contacts";
+      const docRef = doc(db, collectionName, id);
+
+      // Mark as read if not already
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists() && !docSnap.data().read) {
+        await updateDoc(docRef, {
+          read: true,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Get the message data
+      const messageData = docSnap.data();
+      setSelectedMessage({
+        id,
+        type,
+        ...messageData,
+        createdAt: messageData.createdAt?.toDate() || new Date(),
+        updatedAt: messageData.updatedAt?.toDate() || new Date(),
+      });
+      setIsDetailOpen(true);
+    } catch (error) {
+      console.error("Error fetching message details:", error);
+    }
+  };
+
   const getStats = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -247,7 +452,8 @@ const ContactDashboard = () => {
         item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.subject?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.organization?.toLowerCase().includes(searchTerm.toLowerCase())
+        item.organization?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.business?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   };
 
@@ -377,7 +583,13 @@ const ContactDashboard = () => {
                           )}
                           <th
                             className="px-6 py-4 text-left text-sm font-semibold text-gray-600 cursor-pointer hover:text-[#e71c5d]"
-                            onClick={() => handleSort("subject")}
+                            onClick={() =>
+                              handleSort(
+                                activeTab === "business"
+                                  ? "business"
+                                  : "subject"
+                              )
+                            }
                           >
                             <div className="flex items-center gap-2">
                               {activeTab === "business"
@@ -398,13 +610,16 @@ const ContactDashboard = () => {
                           <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
                             Status
                           </th>
+                          <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">
+                            Actions
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {getCurrentData().length === 0 ? (
                           <tr>
                             <td
-                              colSpan={activeTab === "business" ? 6 : 5}
+                              colSpan={activeTab === "business" ? 7 : 6}
                               className="px-6 py-8 text-center text-gray-500"
                             >
                               No messages found
@@ -417,7 +632,9 @@ const ContactDashboard = () => {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="border-b border-gray-100 hover:bg-gray-50"
+                              className={`border-b border-gray-100 hover:bg-gray-50 ${
+                                !item.read ? "bg-blue-50" : ""
+                              }`}
                             >
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
@@ -430,6 +647,9 @@ const ContactDashboard = () => {
                                   </div>
                                   <span className="font-medium text-gray-900">
                                     {item.name}
+                                    {!item.read && (
+                                      <span className="ml-2 inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                                    )}
                                   </span>
                                 </div>
                               </td>
@@ -477,6 +697,17 @@ const ContactDashboard = () => {
                                   )}
                                 </button>
                               </td>
+                              <td className="px-6 py-4 text-center">
+                                <button
+                                  onClick={() =>
+                                    handleViewDetails(item.id, item.type)
+                                  }
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors text-sm"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </button>
+                              </td>
                             </motion.tr>
                           ))
                         )}
@@ -489,6 +720,13 @@ const ContactDashboard = () => {
           </>
         )}
       </div>
+
+      {/* Message Detail Dialog */}
+      <MessageDetailDialog
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        message={selectedMessage}
+      />
     </div>
   );
 };

@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,9 +11,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Settings, LogOut, User, Home } from "lucide-react";
 
 const Header = ({ user }) => {
+  const router = useRouter();
+
+  // Function to handle logout
+  const handleLogout = () => {
+    try {
+      // Remove the user session from localStorage
+      localStorage.removeItem("dashboardSession");
+
+      // Clear any other user data
+      localStorage.removeItem("rememberedUser");
+      localStorage.removeItem("currentUser");
+
+      console.log("User logged out successfully");
+
+      // Redirect to login page
+      router.push("/admin-login");
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
+  };
+
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center px-4 gap-4 justify-between">
@@ -52,7 +76,10 @@ const Header = ({ user }) => {
                 <span>Site Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">
+              <DropdownMenuItem
+                className="text-red-600 cursor-pointer"
+                onClick={handleLogout}
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Logout</span>
               </DropdownMenuItem>

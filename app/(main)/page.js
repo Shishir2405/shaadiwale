@@ -6,7 +6,7 @@ import MembershipCards from "@/components/Landing/MembershipCards";
 import JourneySteps from "@/components/Landing/StepsSection";
 import ExclusiveSection from "@/components/Landing/ExclusiveSection";
 import Testimonials from "@/components/Landing/Testimonial";
-
+import UserMembershipCard from "@/components/Landing/UserMemberCard";
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
@@ -16,15 +16,15 @@ export default function Home() {
       try {
         const userStr = localStorage.getItem("user");
         console.log("Raw user string:", userStr);
-        
+
         if (userStr) {
           const parsedUser = JSON.parse(userStr);
           console.log("Parsed user data:", parsedUser);
-          
+
           setIsLoggedIn(true);
           setUserData({
             ...parsedUser,
-            uid: parsedUser.email // Using email as ID since that's what's available
+            uid: parsedUser.email, // Using email as ID since that's what's available
           });
         }
       } catch (error) {
@@ -43,7 +43,7 @@ export default function Home() {
     <>
       <Hero />
       <MatrimonySplitSection />
-      <section className="w-full py-12 bg-gray-50">
+      {/* <section className="w-full py-12 bg-gray-50">
         <MembershipCards
           userId={userData?.uid}
           isAdmin={userData?.role === "Verifier"}
@@ -51,7 +51,8 @@ export default function Home() {
             console.log("Edit plan:", planId);
           }}
         />
-      </section>
+      </section> */}
+      <UserMembershipCard />
       <JourneySteps />
       <ExclusiveSection />
       <Testimonials />
