@@ -11,8 +11,7 @@ import {
   orderBy,
   where,
 } from "firebase/firestore";
-import { db, auth } from "@/lib/firebase";
-import { useAuthState } from "react-firebase-hooks/auth";
+import { db } from "@/lib/firebase";
 import {
   Plus,
   Loader2,
@@ -24,7 +23,6 @@ import {
 import AdCard from "@/components/AdForm/AdCard";
 
 export default function AdvertisementPage() {
-  const [user, authLoading] = useAuthState(auth);
   const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,19 +32,9 @@ export default function AdvertisementPage() {
 
   useEffect(() => {
     const fetchAds = async () => {
-      if (authLoading) return;
-      if (!user) {
-        setError("You must be logged in to view advertisements");
-        setLoading(false);
-        return;
-      }
-
       try {
-        // Simple query without compound indexing requirements
-        let adsQuery = query(
-          collection(db, "advertisements"),
-          where("userId", "==", user.uid)
-        );
+        // Fetch all advertisements without user filtering
+        let adsQuery = query(collection(db, "advertisements"));
 
         const querySnapshot = await getDocs(adsQuery);
         const adsData = querySnapshot.docs
@@ -71,7 +59,7 @@ export default function AdvertisementPage() {
     };
 
     fetchAds();
-  }, [user, authLoading]);
+  }, []);
 
   const handleDelete = async (id) => {
     if (confirm("Are you sure you want to delete this advertisement?")) {
@@ -104,25 +92,6 @@ export default function AdvertisementPage() {
 
     return true;
   });
-
-  if (authLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg max-w-4xl mx-auto my-8">
-        <div className="flex items-center">
-          <AlertTriangle className="w-5 h-5 mr-2" />
-          <span>You must be logged in to view this page</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6">

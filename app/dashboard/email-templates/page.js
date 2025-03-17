@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db, auth } from "@/lib/firebase";
-import { useAuthState } from "react-firebase-hooks/auth";
+import { db } from "@/lib/firebase";
 import {
   collection,
   query,
@@ -290,54 +289,30 @@ const TemplatesList = ({
 };
 
 export default function EmailTemplatePage() {
-  const [user, authLoading] = useAuthState(auth);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [users, setUsers] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sendError, setSendError] = useState(null);
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      if (!user) return;
-
+    const initializeData = async () => {
       try {
-        // For demo purposes, just set isAdmin to true to bypass the admin check
-        setIsAdmin(true);
-        fetchUsers();
-        fetchTemplates();
-
-        // In a real app, you would use this code instead:
-        // const userDoc = await getDoc(doc(db, 'users', user.uid));
-        // if (userDoc.exists() && userDoc.data().role === 'admin') {
-        //   setIsAdmin(true);
-        //   fetchUsers();
-        //   fetchTemplates();
-        // } else {
-        //   setError("You don't have admin privileges to access this page");
-        //   setLoading(false);
-        // }
+        await Promise.all([fetchUsers(), fetchTemplates()]);
       } catch (err) {
-        console.error("Error checking admin status:", err);
-        setError("An error occurred while verifying your permissions");
+        console.error("Error initializing data:", err);
+        setError("An error occurred while loading data");
+      } finally {
         setLoading(false);
       }
     };
 
-    if (!authLoading) {
-      if (user) {
-        checkAdminStatus();
-      } else {
-        setError("You must be logged in to access this page");
-        setLoading(false);
-      }
-    }
-  }, [user, authLoading]);
+    initializeData();
+  }, []);
 
   const fetchUsers = async () => {
     try {
@@ -352,11 +327,10 @@ export default function EmailTemplatePage() {
         .filter((user) => user.email); // Only include users with email addresses
 
       setUsers(usersData);
-      setLoading(false);
     } catch (err) {
       console.error("Error fetching users:", err);
       setError("Failed to load users list");
-      setLoading(false);
+      throw err;
     }
   };
 
@@ -379,6 +353,7 @@ export default function EmailTemplatePage() {
     } catch (err) {
       console.error("Error fetching templates:", err);
       setError("Failed to load email templates");
+      throw err;
     }
   };
 
@@ -403,7 +378,7 @@ export default function EmailTemplatePage() {
           content: template.content,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          createdBy: user.uid,
+          createdBy: "anonymous", // No user ID, using anonymous instead
         };
 
         const docRef = await addDoc(
@@ -550,7 +525,7 @@ export default function EmailTemplatePage() {
           content: personalizedContent,
           status: "pending",
           createdAt: serverTimestamp(),
-          sentBy: user.uid,
+          sentBy: "anonymous", // No user ID, using anonymous instead
         };
 
         emailBatch.push(addDoc(collection(db, "emailQueue"), emailData));
@@ -571,7 +546,7 @@ export default function EmailTemplatePage() {
     }
   };
 
-  if (authLoading || (loading && !error)) {
+  if (loading && !error) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
@@ -595,19 +570,6 @@ export default function EmailTemplatePage() {
           >
             Back to Dashboard
           </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          <div className="flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-2" />
-            <span>You don't have admin privileges to access this page</span>
-          </div>
         </div>
       </div>
     );

@@ -35,7 +35,7 @@ export default function AdminChatPage() {
 
   useEffect(() => {
     const checkAdminStatus = async () => {
-      if (!user) return;
+    
 
       try {
         // For demo purposes, just set isAdmin to true to bypass the admin check
@@ -100,13 +100,6 @@ export default function AdminChatPage() {
            phone.includes(searchLower);
   });
 
-  if (authLoading || (loading && !error)) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
-      </div>
-    );
-  }
 
   if (error) {
     return (

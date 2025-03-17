@@ -2,151 +2,139 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
+import Link from "next/link";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  ArrowRight,
+  ChevronLeft,
+  Shield,
+  Phone,
+  User,
+  Heart,
+  Star,
+  ShoppingBag,
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import { auth, db } from "@/lib/firebase";
 import {
   signInWithEmailAndPassword,
-  sendPasswordResetEmail,
   RecaptchaVerifier,
   signInWithPhoneNumber,
+  sendPasswordResetEmail,
 } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { EyeIcon, EyeOffIcon, Mail, Lock, Loader2, Phone } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  signInWithEmail,
-  validatePhoneNumber,
-  formatPhoneNumber,
-  getAuthErrorMessage,
-} from "./auth-utils";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+// Add this to the top of your imports
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
-// Initialize Firestore
-const db = getFirestore();
-
-// Background components remain the same...
-const FloatingBubbles = () => (
-  <div className="fixed inset-0 -z-10 overflow-hidden">
-    {Array.from({ length: 8 }).map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute rounded-full bg-gradient-to-r from-pink-100 to-purple-100"
-        initial={{
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          scale: 0,
-        }}
-        animate={{
-          x: [
-            Math.random() * window.innerWidth,
-            Math.random() * window.innerWidth,
-          ],
-          y: [
-            Math.random() * window.innerHeight,
-            Math.random() * window.innerHeight,
-          ],
-          scale: [1, 1.5, 1],
-        }}
-        transition={{
-          duration: 20,
-          repeat: Infinity,
-          repeatType: "reverse",
-        }}
-        style={{
-          width: Math.random() * 300 + 100,
-          height: Math.random() * 300 + 100,
-          filter: "blur(60px)",
-          opacity: 0.4,
-        }}
-      />
-    ))}
-  </div>
-);
-
-// Interactive gradient background component
-const InteractiveBackground = () => (
-  <div className="fixed inset-0 -z-20">
-    <div className="w-full h-full bg-gradient-to-br from-pink-50 via-purple-50 to-white" />
-  </div>
-);
-
-const LoginForm = () => {
+export default function LoginForm() {
   const router = useRouter();
 
-  // States for email/password login
+  // Animation states
+  const [showAnimation, setShowAnimation] = useState(false);
+
+  // Auth states
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [focusedInput, setFocusedInput] = useState(null);
-
-  // States for phone login
-  const [isPhoneDialogOpen, setIsPhoneDialogOpen] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+91");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [verificationId, setVerificationId] = useState(null);
-  const [isCodeSent, setIsCodeSent] = useState(false);
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
-
-  // UI states
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const recaptchaContainerRef = useRef(null);
+  // Phone auth states
+  const [isPhoneMode, setIsPhoneMode] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [isCodeSent, setIsCodeSent] = useState(false);
+  const [verificationId, setVerificationId] = useState(null);
 
-  // Initialize reCAPTCHA when phone dialog opens
+  // Refs
+  const recaptchaWrapperRef = useRef(null);
+
+  // Initialize animation on page load
   useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      isPhoneDialogOpen &&
-      !recaptchaVerifier
-    ) {
-      // Clear existing instances
+    setShowAnimation(true);
+  }, []);
+
+  // Clear recaptcha when component unmounts or phone mode changes
+  useEffect(() => {
+    return () => {
       if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
+        try {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        } catch (error) {
+          console.error("Error clearing recaptcha:", error);
+        }
       }
+    };
+  }, []);
 
-      const verifierDiv = recaptchaContainerRef.current;
-      if (!verifierDiv) return;
-
+  // Initialize App Check for phone authentication
+  useEffect(() => {
+    // Only run on client side and only once
+    if (typeof window !== "undefined" && !window.appCheckInitialized) {
       try {
-        const verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-          size: "normal",
-          callback: () => {
-            setErrorMessage("");
-          },
-          "expired-callback": () => {
-            setErrorMessage("reCAPTCHA expired. Please try again.");
-          },
+        // Initialize App Check with your reCAPTCHA v3 site key
+        const appCheck = initializeAppCheck(auth.app, {
+          provider: new ReCaptchaV3Provider(
+            "6LevS_cqAAAAACsL-4-oGdF77yLu5gRf_2vQpXGI"
+          ),
+          isTokenAutoRefreshEnabled: true,
         });
 
-        verifier.render().then(() => {
-          setRecaptchaVerifier(verifier);
-        });
-
-        return () => {
-          if (verifier) {
-            verifier.clear();
-            setRecaptchaVerifier(null);
-          }
-        };
+        // Mark as initialized to prevent duplicate initialization
+        window.appCheckInitialized = true;
+        console.log("App Check initialized successfully");
       } catch (error) {
-        console.error("reCAPTCHA initialization error:", error);
-        setErrorMessage("Failed to initialize phone authentication.");
+        console.error("Error initializing App Check:", error);
       }
     }
-  }, [isPhoneDialogOpen]);
+  }, []);
+  // Inside your component
+  useEffect(() => {
+    // Initialize reCAPTCHA only once when component mounts
+    if (isPhoneMode && !window.recaptchaVerifier) {
+      // Delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        try {
+          // Create a recaptchaVerifier instance directly with invisible size
+          window.recaptchaVerifier = new RecaptchaVerifier(
+            auth,
+            "recaptcha-container",
+            {
+              size: "invisible", // Change to invisible for better UX
+              callback: () => {
+                // This callback is called when the reCAPTCHA is solved
+                console.log("reCAPTCHA solved");
+              },
+            }
+          );
+        } catch (error) {
+          console.error("Error initializing reCAPTCHA:", error);
+          setErrorMessage(
+            "Failed to initialize verification. Please refresh and try again."
+          );
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isPhoneMode]);
 
   // Handle email/password login
   const handleEmailLogin = async (e) => {
@@ -160,14 +148,15 @@ const LoginForm = () => {
 
     setIsLoading(true);
     try {
-      const { user, userData } = await signInWithEmail(email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
 
-      if (!user.emailVerified) {
-        setErrorMessage("Please verify your email before logging in");
-        return;
-      }
-
-      setSuccessMessage("Login successful! Redirecting...");
+      // Get user data from Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid));
 
       // Update last login timestamp
       await setDoc(
@@ -178,8 +167,11 @@ const LoginForm = () => {
         { merge: true }
       );
 
+      setSuccessMessage("Login successful! Redirecting...");
+
+      // Redirect to dashboard
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/");
       }, 1500);
     } catch (error) {
       console.error("Login error:", error);
@@ -189,8 +181,9 @@ const LoginForm = () => {
     }
   };
 
-  // Handle phone number verification
-  const handleSendCode = async () => {
+  // Handle phone verification
+  const handleSendCode = async (e) => {
+    e.preventDefault();
     clearMessages();
 
     if (!validatePhoneNumber(phoneNumber)) {
@@ -198,42 +191,37 @@ const LoginForm = () => {
       return;
     }
 
-    if (!recaptchaVerifier) {
-      setErrorMessage("Please wait for the verification system to load");
-      return;
-    }
-
     setIsLoading(true);
     try {
       const formattedNumber = formatPhoneNumber(phoneNumber, countryCode);
 
-      // Check if phone number exists in any user document
-      const userSnapshot = await getDocs(
-        query(collection(db, "users"), where("phone", "==", phoneNumber))
-      );
-
-      if (userSnapshot.empty) {
-        setErrorMessage("No account found with this phone number");
-        return;
+      if (!window.recaptchaVerifier) {
+        throw new Error(
+          "Verification system not initialized. Please refresh the page."
+        );
       }
 
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         formattedNumber,
-        recaptchaVerifier
+        window.recaptchaVerifier
       );
 
       setVerificationId(confirmationResult);
       setIsCodeSent(true);
-      setSuccessMessage("Verification code sent!");
+      setSuccessMessage("Verification code sent to your phone!");
     } catch (error) {
-      console.error("Error sending code:", error);
-      setErrorMessage(getAuthErrorMessage(error.code));
+      console.error("Error sending verification code:", error);
+      setErrorMessage(`Failed to send code: ${error.message}`);
 
       // Reset reCAPTCHA on error
-      if (recaptchaVerifier) {
-        recaptchaVerifier.clear();
-        setRecaptchaVerifier(null);
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        } catch (e) {
+          console.error("Error clearing recaptcha after failure:", e);
+        }
       }
     } finally {
       setIsLoading(false);
@@ -241,11 +229,12 @@ const LoginForm = () => {
   };
 
   // Handle OTP verification
-  const handleVerifyCode = async () => {
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
     clearMessages();
 
     if (!verificationCode || verificationCode.length !== 6) {
-      setErrorMessage("Please enter a valid verification code");
+      setErrorMessage("Please enter a valid 6-digit verification code");
       return;
     }
 
@@ -254,28 +243,27 @@ const LoginForm = () => {
       const result = await verificationId.confirm(verificationCode);
       const user = result.user;
 
-      // Get user data from Firestore
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) {
-        throw new Error("User data not found");
-      }
-
-      // Update last login
+      // Update or create user document
       await setDoc(
         doc(db, "users", user.uid),
         {
+          phone: user.phoneNumber,
           lastLoginAt: new Date().toISOString(),
         },
         { merge: true }
       );
 
-      setSuccessMessage("Phone verified! Redirecting...");
+      setSuccessMessage("Phone verified successfully! Redirecting...");
+
+      // Redirect to dashboard
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/");
       }, 1500);
     } catch (error) {
       console.error("Verification error:", error);
-      setErrorMessage(getAuthErrorMessage(error.code));
+      setErrorMessage(
+        `Verification failed: ${getAuthErrorMessage(error.code)}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -284,6 +272,7 @@ const LoginForm = () => {
   // Handle password reset
   const handleForgotPassword = async () => {
     clearMessages();
+
     if (!email) {
       setErrorMessage("Please enter your email address first");
       return;
@@ -300,259 +289,232 @@ const LoginForm = () => {
     }
   };
 
+  // Reset to initial state
+  const resetPhoneFlow = () => {
+    setIsCodeSent(false);
+    setVerificationCode("");
+    clearMessages();
+
+    // Clear recaptcha if needed
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      } catch (e) {
+        console.error("Error clearing recaptcha on reset:", e);
+      }
+    }
+  };
+
+  // Toggle between email and phone login
+  const toggleLoginMode = () => {
+    clearMessages();
+    resetPhoneFlow();
+    setIsPhoneMode(!isPhoneMode);
+  };
+
   // Utility functions
   const clearMessages = () => {
     setErrorMessage("");
     setSuccessMessage("");
   };
 
-  const handleDialogClose = () => {
-    setIsPhoneDialogOpen(false);
-    setIsCodeSent(false);
-    setPhoneNumber("");
-    setVerificationCode("");
-    clearMessages();
+  const validatePhoneNumber = (phone) => {
+    return phone && phone.length >= 10;
+  };
 
-    if (recaptchaVerifier) {
-      recaptchaVerifier.clear();
-      setRecaptchaVerifier(null);
+  const formatPhoneNumber = (phone, countryCode) => {
+    // Remove any non-digit characters
+    const cleaned = phone.replace(/\D/g, "");
+    return `${countryCode}${cleaned}`;
+  };
+
+  const getAuthErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case "auth/invalid-email":
+        return "Invalid email address format";
+      case "auth/user-disabled":
+        return "This account has been disabled";
+      case "auth/user-not-found":
+        return "No account found with this email";
+      case "auth/wrong-password":
+        return "Incorrect password";
+      case "auth/too-many-requests":
+        return "Too many unsuccessful login attempts. Please try again later";
+      case "auth/invalid-phone-number":
+        return "The phone number is invalid";
+      case "auth/invalid-verification-code":
+        return "The verification code is invalid";
+      case "auth/code-expired":
+        return "The verification code has expired";
+      case "auth/missing-verification-code":
+        return "Please enter the verification code";
+      case "auth/captcha-check-failed":
+        return "reCAPTCHA verification failed. Please try again";
+      default:
+        return "An error occurred during authentication. Please try again";
     }
   };
 
-  // JSX remains mostly the same as your original component...
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <InteractiveBackground />
-      <FloatingBubbles />
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      {/* Background with overlay */}
+      <div
+        className="fixed inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?q=80&w=2187&auto=format&fit=crop')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+      {/* Animated gradient overlay */}
+      <div className="fixed inset-0 bg-gradient-to-br from-pink-900/90 via-pink-800/80 to-pink-900/90"></div>
+
+      {/* Floating animated elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 opacity-20 animate-float-slow">
+          <ShoppingBag size={80} className="text-white" />
+        </div>
+        <div className="absolute top-40 right-20 opacity-20 animate-float-medium">
+          <User size={100} className="text-white" />
+        </div>
+        <div className="absolute bottom-40 left-20 opacity-20 animate-float-fast">
+          <Heart size={60} className="text-white" />
+        </div>
+        <div className="absolute bottom-60 right-10 opacity-20 animate-float-medium">
+          <Star size={90} className="text-white" />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div
+        className={`relative z-10 w-full max-w-md transition-all duration-700 ${
+          showAnimation
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 translate-y-8"
+        }`}
       >
-        {/* Card Component */}
-        <Card className="w-full max-w-md p-8 space-y-6 bg-white/80 backdrop-blur-xl shadow-xl rounded-xl border-purple-100">
-          {/* Header */}
-          <motion.div
-            className="text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-              Welcome Back
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Please sign in to continue
-            </p>
-          </motion.div>
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-white">Welcome Back</h1>
+          <p className="text-pink-200 mt-2">Sign in to access your account</p>
+        </div>
 
-          {/* Error/Success Messages */}
-          <AnimatePresence>
-            {errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm"
-              >
-                {errorMessage}
-              </motion.div>
-            )}
-            {successMessage && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm"
-              >
-                {successMessage}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Email Login Form */}
-          <form onSubmit={handleEmailLogin} className="space-y-4">
-            <div className="space-y-4">
-              {/* Email Input */}
-              <div className="relative">
-                <Mail
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    focusedInput === "email"
-                      ? "text-purple-500"
-                      : "text-gray-400"
-                  }`}
-                />
-                <Input
-                  type="email"
-                  placeholder="Email address"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    clearMessages();
-                  }}
-                  onFocus={() => setFocusedInput("email")}
-                  onBlur={() => setFocusedInput(null)}
-                  className="pl-10 border-purple-100 focus:border-purple-300"
-                  required
-                />
-              </div>
-
-              {/* Password Input */}
-              <div className="relative">
-                <Lock
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    focusedInput === "password"
-                      ? "text-purple-500"
-                      : "text-gray-400"
-                  }`}
-                />
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    clearMessages();
-                  }}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() => setFocusedInput(null)}
-                  className="pl-10 border-purple-100 focus:border-purple-300"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-purple-500"
-                >
-                  {showPassword ? (
-                    <EyeOffIcon size={20} />
-                  ) : (
-                    <EyeIcon size={20} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Forgot Password Link */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-sm text-purple-600 hover:text-purple-700"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            {/* Login Button */}
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                "Sign in"
-              )}
-            </Button>
-          </form>
-
-          {/* Separator */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full bg-purple-100" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">
-                Or continue with
-              </span>
-            </div>
+        <Card className="w-full backdrop-blur-md bg-white/95 shadow-2xl border-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-pink-500 to-pink-700 p-6">
+            <CardTitle className="text-3xl font-bold text-center text-white flex items-center justify-center">
+              <User className="mr-3 h-8 w-8" />
+              {isPhoneMode ? "Phone Login" : "Account Login"}
+            </CardTitle>
+            <CardDescription className="text-center text-pink-100 mt-2">
+              {isPhoneMode
+                ? "Sign in with your phone number"
+                : "Sign in with your email and password"}
+            </CardDescription>
           </div>
 
-          {/* Phone Authentication Dialog */}
-          <div className="space-y-3">
-            <Dialog
-              open={isPhoneDialogOpen}
-              onOpenChange={(open) => {
-                if (!open) handleDialogClose();
-                else setIsPhoneDialogOpen(true);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full border-purple-100 hover:bg-purple-50"
-                  onClick={() => {
-                    setIsPhoneDialogOpen(true);
-                    clearMessages();
-                  }}
-                >
-                  <Phone className="w-5 h-5 mr-2" />
-                  Login with Phone
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white">
-                <DialogHeader>
-                  <DialogTitle className="text-purple-600">
-                    Phone Authentication
-                  </DialogTitle>
-                </DialogHeader>
+          <CardContent className="p-8">
+            {errorMessage && (
+              <Alert
+                variant="destructive"
+                className="mb-6 bg-red-50 border-red-200"
+              >
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            )}
 
-                <div className="space-y-4">
-                  {!isCodeSent ? (
-                    <>
-                      {/* Country Code and Phone Input */}
+            {successMessage && (
+              <Alert className="mb-6 bg-green-50 border-green-200 text-green-800">
+                <AlertDescription>{successMessage}</AlertDescription>
+              </Alert>
+            )}
+
+            {isPhoneMode ? (
+              // Phone authentication form
+              <form
+                onSubmit={isCodeSent ? handleVerifyCode : handleSendCode}
+                className="space-y-6"
+              >
+                {!isCodeSent ? (
+                  // Phone number input
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone" className="text-gray-700">
+                        Phone Number
+                      </Label>
                       <div className="flex gap-2">
                         <select
                           value={countryCode}
                           onChange={(e) => setCountryCode(e.target.value)}
-                          className="w-24 p-2 border border-purple-100 rounded-md focus:border-purple-300 focus:outline-none"
+                          className="w-24 p-2 border border-pink-200 rounded-md focus:border-pink-400 focus:ring-pink-400"
                         >
                           <option value="+91">+91</option>
                           <option value="+1">+1</option>
-                          {/* Add more country codes as needed */}
+                          <option value="+44">+44</option>
+                          <option value="+61">+61</option>
                         </select>
-                        <Input
-                          type="tel"
-                          placeholder="Phone number"
-                          value={phoneNumber}
-                          onChange={(e) => {
-                            setPhoneNumber(e.target.value.replace(/\D/g, ""));
-                            clearMessages();
-                          }}
-                          className="flex-1 border-purple-100"
-                          maxLength={10}
-                        />
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Phone className="h-5 w-5 text-pink-500" />
+                          </div>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(e) => {
+                              setPhoneNumber(e.target.value.replace(/\D/g, ""));
+                              clearMessages();
+                            }}
+                            className="pl-10 border-pink-200 focus:border-pink-400 focus:ring-pink-400"
+                            placeholder="Enter your phone number"
+                            maxLength={10}
+                            required
+                          />
+                        </div>
                       </div>
+                    </div>
 
-                      {/* ReCAPTCHA Container */}
-                      <div
-                        id="recaptcha-container"
-                        ref={recaptchaContainerRef}
-                        className="flex justify-center"
-                      />
+                    {/* reCAPTCHA container - critical for phone auth */}
+                    <div
+                      id="recaptcha-container"
+                      ref={recaptchaWrapperRef}
+                      className="flex justify-center my-4"
+                    ></div>
 
-                      {/* Send Code Button */}
-                      <Button
-                        onClick={handleSendCode}
-                        className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
-                        disabled={isLoading}
+                    <Button
+                      type="submit"
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-white"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Sending Code...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center">
+                          <span>Send Verification Code</span>
+                          <ArrowRight className="ml-2" />
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  // Verification code input
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="verificationCode"
+                        className="flex items-center text-gray-700"
                       >
-                        {isLoading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          "Send Code"
-                        )}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Verification Code Input */}
+                        <Shield className="h-4 w-4 mr-2 text-pink-500" />
+                        Verification Code
+                      </Label>
                       <Input
+                        id="verificationCode"
                         type="text"
-                        placeholder="Enter verification code"
                         value={verificationCode}
                         onChange={(e) => {
                           setVerificationCode(
@@ -560,61 +522,204 @@ const LoginForm = () => {
                           );
                           clearMessages();
                         }}
+                        className="text-center text-xl tracking-wider border-pink-200 focus:border-pink-400 focus:ring-pink-400 py-6 font-medium"
+                        placeholder="Enter 6-digit code"
+                        autoComplete="one-time-code"
                         maxLength={6}
-                        className="text-center text-lg tracking-wider border-purple-100"
+                        required
                       />
+                      <p className="text-sm text-gray-500 mt-2 text-center">
+                        We've sent a 6-digit code to {countryCode} {phoneNumber}
+                      </p>
+                    </div>
 
-                      {/* Verify Code Button */}
-                      <Button
-                        onClick={handleVerifyCode}
-                        className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          "Verify Code"
-                        )}
-                      </Button>
+                    <Button
+                      type="submit"
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-white"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Verifying...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center">
+                          <span>Verify Code</span>
+                          <Shield className="ml-2 h-4 w-4" />
+                        </div>
+                      )}
+                    </Button>
 
-                      {/* Try Different Number Button */}
-                      <Button
-                        variant="outline"
-                        className="w-full border-purple-100 hover:bg-purple-50"
-                        onClick={() => {
-                          setIsCodeSent(false);
-                          setVerificationCode("");
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full mt-2 border-pink-200 text-pink-700 hover:bg-pink-50"
+                      onClick={resetPhoneFlow}
+                    >
+                      Try Different Number
+                    </Button>
+                  </div>
+                )}
+              </form>
+            ) : (
+              // Email/Password login form
+              <form onSubmit={handleEmailLogin} className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-gray-700">
+                      Email Address
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Mail className="h-5 w-5 text-pink-500" />
+                      </div>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
                           clearMessages();
-                          if (recaptchaVerifier) {
-                            recaptchaVerifier.clear();
-                            setRecaptchaVerifier(null);
-                          }
                         }}
-                        disabled={isLoading}
-                      >
-                        Try Different Number
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                        className="pl-10 border-pink-200 focus:border-pink-400 focus:ring-pink-400"
+                        placeholder="Enter your email"
+                        required
+                      />
+                    </div>
+                  </div>
 
-          {/* Register Link */}
-          <p className="text-center text-sm text-gray-600">
-            Don't have an account?{" "}
-            <a
-              href="/register"
-              className="text-purple-600 hover:text-purple-700 hover:underline"
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-gray-700">
+                      Password
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Lock className="h-5 w-5 text-pink-500" />
+                      </div>
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          clearMessages();
+                        }}
+                        className="pl-10 pr-10 border-pink-200 focus:border-pink-400 focus:ring-pink-400"
+                        placeholder="Enter your password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-pink-500" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-pink-500" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-sm text-pink-600 hover:text-pink-800"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-pink-600 hover:bg-pink-700 text-white"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Signing In...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <span>Sign In to Your Account</span>
+                      <ArrowRight className="ml-2" />
+                    </div>
+                  )}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+
+          <CardFooter className="px-8 py-4 flex flex-col space-y-4 items-center border-t border-pink-100 bg-pink-50/80 rounded-b-lg">
+            <button
+              onClick={toggleLoginMode}
+              className="text-pink-600 hover:text-pink-800 flex items-center text-sm"
             >
-              Register here
-            </a>
-          </p>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              {isPhoneMode
+                ? "Sign in with email instead"
+                : "Sign in with phone instead"}
+            </button>
+            <p className="text-xs text-pink-600 text-center">
+              Secure login protected with advanced encryption
+            </p>
+          </CardFooter>
         </Card>
-      </motion.div>
+
+        <div className="mt-6 text-center text-white/80 text-sm">
+          <p>
+            Don't have an account?{" "}
+            <Link href="/register" className="text-white underline">
+              Create Account
+            </Link>
+          </p>
+        </div>
+      </div>
+
+      {/* Add animations */}
+      <style jsx global>{`
+        @keyframes float-slow {
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+        @keyframes float-medium {
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-15px);
+          }
+        }
+        @keyframes float-fast {
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+        .animate-float-slow {
+          animation: float-slow 8s ease-in-out infinite;
+        }
+        .animate-float-medium {
+          animation: float-medium 6s ease-in-out infinite;
+        }
+        .animate-float-fast {
+          animation: float-fast 4s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
-};
-
-export default LoginForm;
+}

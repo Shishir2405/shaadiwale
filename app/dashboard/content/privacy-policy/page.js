@@ -16,12 +16,7 @@ export default function PrivacyPolicyAdminPage() {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setLoading(false);
-      if (user) {
-        // Here you can add additional checks for admin role if needed
-        setAuthorized(true);
-      } else {
-        router.push("/login?redirect=/admin/privacy-policy");
-      }
+    
     });
 
     return () => unsubscribe();
@@ -38,9 +33,6 @@ export default function PrivacyPolicyAdminPage() {
     );
   }
 
-  if (!authorized) {
-    return null; // Will redirect to login
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">

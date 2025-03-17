@@ -423,16 +423,6 @@ export default function MatchmakingPage() {
     education: "",
   });
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        fetchUsers();
-      } else {
-        setError("You must be logged in to access this page");
-        setLoading(false);
-      }
-    }
-  }, [user, authLoading]);
 
   // Using the fetchUsers function similar to the one in your email template page
   const fetchUsers = async () => {
@@ -1160,13 +1150,7 @@ export default function MatchmakingPage() {
     return heightIndex >= fromIndex && heightIndex <= toIndex;
   };
 
-  if (authLoading || loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
-      </div>
-    );
-  }
+ 
 
   if (error) {
     return (

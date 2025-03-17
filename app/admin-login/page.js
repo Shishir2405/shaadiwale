@@ -6,9 +6,9 @@ import { Loader2, Lock, Mail, EyeOff, Eye } from "lucide-react";
 
 // Admin users data
 const validUsers = [
-  { email: "user1@example.com", password: "password123" },
-  { email: "user2@example.com", password: "password456" },
-  { email: "user3@example.com", password: "password789" },
+  { email: "shishirshrivastava30@gmail.com", password: "Shishir@2405" },
+  { email: "botmartz@gmail.com", password: "rdcv4c75" },
+  { email: "admin@gmail.com", password: "admin" },
 ];
 
 export default function AdminLoginPage() {

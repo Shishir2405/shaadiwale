@@ -94,14 +94,10 @@ export default function EducationManagement() {
   });
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
+
 
   useEffect(() => {
-    if (!user) return;
+
 
     const fetchUsers = () => {
       try {

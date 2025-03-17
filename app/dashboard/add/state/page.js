@@ -97,14 +97,9 @@ export default function StateManagement() {
   });
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
 
   useEffect(() => {
-    if (!user) return;
+
 
     const fetchUsers = () => {
       try {
@@ -307,13 +302,6 @@ export default function StateManagement() {
     }
   };
 
-  if (loading || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-pink-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
