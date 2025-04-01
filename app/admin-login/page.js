@@ -9,6 +9,7 @@ const validUsers = [
   { email: "shishirshrivastava30@gmail.com", password: "Shishir@2405" },
   { email: "botmartz@gmail.com", password: "rdcv4c75" },
   { email: "admin@gmail.com", password: "admin" },
+  { email: "ashutosh.agarwal@mobiwebgs.com", password: "ashutosh123!" },
 ];
 
 export default function AdminLoginPage() {
