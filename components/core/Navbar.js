@@ -27,6 +27,7 @@ import {
   doc,
   deleteDoc,
 } from "firebase/firestore";
+import AnimatedLogo from "./AnimatedLogo";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
@@ -218,13 +219,7 @@ const MobileMenu = ({ isOpen, onClose, user, handleLogout, setShowSignUp }) => (
         {/* Header */}
         <div className="flex items-center justify-between p-6">
           <Link href="/" onClick={onClose}>
-            <Image
-              src="/logo.png"
-              alt="Logo"
-              width={150}
-              height={50}
-              priority
-            />
+            <AnimatedLogo />
           </Link>
           <button
             onClick={onClose}
@@ -389,14 +384,7 @@ const Navbar = () => {
               <div className="flex items-center justify-between h-16">
                 {/* Logo */}
                 <Link href="/" className="flex items-center">
-                  <Image
-                    src="/logo.png"
-                    alt="Logo"
-                    width={150}
-                    height={40}
-                    className="h-10 w-auto"
-                    priority
-                  />
+                  <AnimatedLogo />
                 </Link>
 
                 {/* Desktop Navigation */}
