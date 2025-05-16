@@ -8,6 +8,7 @@ import {
   limit,
   getDocs,
   where,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
@@ -41,6 +42,46 @@ const DashboardPage = () => {
   const [members, setMembers] = useState([]);
 
   useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const usersRef = collection(db, "users");
+
+        // Get total members
+        const totalSnapshot = await getDocs(usersRef);
+        const totalCount = totalSnapshot.size;
+
+        // Get active members (active in last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const activeQuery = query(
+          usersRef,
+          where("lastActiveAt", ">=", Timestamp.fromDate(thirtyDaysAgo))
+        );
+        const activeSnapshot = await getDocs(activeQuery);
+        const activeCount = activeSnapshot.size;
+
+        // Get premium members
+        const premiumQuery = query(usersRef, where("isPremium", "==", true));
+        const premiumSnapshot = await getDocs(premiumQuery);
+        const premiumCount = premiumSnapshot.size;
+
+        // Get featured members
+        const featuredQuery = query(usersRef, where("isFeatured", "==", true));
+        const featuredSnapshot = await getDocs(featuredQuery);
+        const featuredCount = featuredSnapshot.size;
+
+        setStats({
+          total: totalCount,
+          active: activeCount,
+          premium: premiumCount,
+          featured: featuredCount,
+        });
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      }
+    };
+
     const fetchMembers = async () => {
       try {
         const membersRef = collection(db, "users");
@@ -51,7 +92,7 @@ const DashboardPage = () => {
           id: doc.id,
           ...doc.data(),
           // Ensure all required fields have fallback values
-          name: doc.data().name || "Anonymous",
+          firstName: doc.data().firstName || "Anonymous",
           maritalStatus: doc.data().maritalStatus || "Not Specified",
           religion: doc.data().religion || "Not Specified",
           caste: doc.data().caste || "Not Specified",
@@ -59,6 +100,7 @@ const DashboardPage = () => {
         }));
 
         setMembers(membersData);
+        setRecentMembers(membersData);
       } catch (error) {
         console.error("Error fetching members:", error);
       } finally {
@@ -66,8 +108,50 @@ const DashboardPage = () => {
       }
     };
 
-    fetchMembers();
-  }, []);
+    // Fetch both stats and members data
+    Promise.all([fetchStats(), fetchMembers()]);
+  }, [timeframe]); // Re-fetch when timeframe changes
+
+  // Update the fetchStats function when timeframe changes
+  useEffect(() => {
+    const updateStatsForTimeframe = async () => {
+      try {
+        const usersRef = collection(db, "users");
+
+        // Calculate date based on selected timeframe
+        const startDate = new Date();
+        if (timeframe === "week") {
+          startDate.setDate(startDate.getDate() - 7);
+        } else if (timeframe === "month") {
+          startDate.setDate(startDate.getDate() - 30);
+        } else if (timeframe === "year") {
+          startDate.setFullYear(startDate.getFullYear() - 1);
+        }
+
+        // Get new users in the selected timeframe
+        const newUsersQuery = query(
+          usersRef,
+          where("createdAt", ">=", Timestamp.fromDate(startDate))
+        );
+        const newUsersSnapshot = await getDocs(newUsersQuery);
+
+        // You could update trends here based on previous periods
+        // This is a simplified example
+        const trendsData = {
+          total: Math.floor(Math.random() * 20) + 1, // Replace with actual calculation
+          active: Math.floor(Math.random() * 15) + 1,
+          premium: Math.floor(Math.random() * 10) + 1,
+          featured: Math.floor(Math.random() * 8) + 1,
+        };
+
+        // You could set this to state if you want to display period-specific trends
+      } catch (error) {
+        console.error("Error updating stats for timeframe:", error);
+      }
+    };
+
+    updateStatsForTimeframe();
+  }, [timeframe]);
 
   // Enhanced Stats Card with better styling
   const StatsCard = ({ title, value, description, icon: Icon, trend }) => (
@@ -179,6 +263,24 @@ const DashboardPage = () => {
     </div>
   );
 
+  // Display a loading state for the stats cards
+  const LoadingStatsCard = ({ icon: Icon }) => (
+    <Card className="relative overflow-hidden">
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-8 w-16 bg-gray-300 rounded animate-pulse"></div>
+          </div>
+          <div className="p-3 rounded-xl bg-gray-200">
+            <Icon className="w-6 h-6 text-gray-400" />
+          </div>
+        </div>
+        <div className="h-4 w-36 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+    </Card>
+  );
+
   return (
     <div className="p-6 space-y-8">
       {/* Header with gradient text */}
@@ -206,34 +308,45 @@ const DashboardPage = () => {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Total Members"
-          value={stats.total}
-          description="Total registered users"
-          icon={Users}
-          trend={{ value: 12, isPositive: true }}
-        />
-        <StatsCard
-          title="Active Members"
-          value={stats.active}
-          description="Active in last 30 days"
-          icon={UserCheck}
-          trend={{ value: 8, isPositive: true }}
-        />
-        <StatsCard
-          title="Premium Members"
-          value={stats.premium}
-          description="Subscribed users"
-          icon={CreditCard}
-          trend={{ value: 5, isPositive: true }}
-        />
-        <StatsCard
-          title="Featured Members"
-          value={stats.featured}
-          description="Highlighted profiles"
-          icon={Star}
-          trend={{ value: 3, isPositive: true }}
-        />
+        {loading ? (
+          <>
+            <LoadingStatsCard icon={Users} />
+            <LoadingStatsCard icon={UserCheck} />
+            <LoadingStatsCard icon={CreditCard} />
+            <LoadingStatsCard icon={Star} />
+          </>
+        ) : (
+          <>
+            <StatsCard
+              title="Total Members"
+              value={stats.total}
+              description="Total registered users"
+              icon={Users}
+              trend={{ value: 12, isPositive: true }}
+            />
+            <StatsCard
+              title="Active Members"
+              value={stats.active}
+              description="Active in last 30 days"
+              icon={UserCheck}
+              trend={{ value: 8, isPositive: true }}
+            />
+            <StatsCard
+              title="Premium Members"
+              value={stats.premium}
+              description="Subscribed users"
+              icon={CreditCard}
+              trend={{ value: 5, isPositive: true }}
+            />
+            <StatsCard
+              title="Featured Members"
+              value={stats.featured}
+              description="Highlighted profiles"
+              icon={Star}
+              trend={{ value: 3, isPositive: true }}
+            />
+          </>
+        )}
       </div>
 
       {/* Recent Members Section */}

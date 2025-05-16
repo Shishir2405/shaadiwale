@@ -211,7 +211,7 @@ const menuItems = [
   {
     title: "User Activity",
     icon: ChartLine,
-    href: "/dashboard/user-activity",
+    href: "/dashboard/user-activity/chat",
   },
   {
     title: "Content Management",

@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Search, RefreshCcw,UserPlus } from "lucide-react";
+import { Trash2, Search, RefreshCcw, UserPlus } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -40,7 +40,7 @@ export default function FirstFormData() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [recordsPerPage, setRecordsPerPage] = useState("10");
-  const [hoveredRow, setHoveredRow] = useState(null); 
+  const [hoveredRow, setHoveredRow] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -119,8 +119,9 @@ export default function FirstFormData() {
     setSearchTerm(value);
     // Filter users locally for instant feedback
     const filtered = users.filter((user) =>
-      Object.values(user).some((val) =>
-        val.toString().toLowerCase().includes(value.toLowerCase())
+      Object.values(user).some(
+        (val) =>
+          val && val.toString().toLowerCase().includes(value.toLowerCase())
       )
     );
     setUsers(filtered);
@@ -150,11 +151,21 @@ export default function FirstFormData() {
 
   const filteredUsers = searchTerm
     ? users.filter((user) =>
-        Object.values(user).some((val) =>
-          val.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        Object.values(user).some(
+          (val) =>
+            val &&
+            val.toString().toLowerCase().includes(searchTerm.toLowerCase())
         )
       )
     : users;
+
+  // Helper function to truncate ID safely
+  const truncateId = (id) => {
+    if (typeof id === "string" && id.length > 8) {
+      return `${id.slice(0, 8)}...`;
+    }
+    return id;
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -260,7 +271,7 @@ export default function FirstFormData() {
             ) : (
               filteredUsers.map((user, index) => (
                 <TableRow
-                  key={user.id}
+                  key={user.id || index}
                   className={
                     hoveredRow === user.id
                       ? "bg-gray-50 transition-colors duration-200"
@@ -278,24 +289,28 @@ export default function FirstFormData() {
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    {user.id.slice(0, 8)}...
+                    {truncateId(user.id)}
                   </TableCell>
-                  <TableCell>{user.firstName}</TableCell>
-                  <TableCell>{user.lastName}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.mobile}</TableCell>
+                  <TableCell>{user.firstName || "N/A"}</TableCell>
+                  <TableCell>{user.lastName || "N/A"}</TableCell>
+                  <TableCell>{user.email || "N/A"}</TableCell>
+                  <TableCell>{user.mobile || "N/A"}</TableCell>
                   <TableCell>
-                    <span
-                      className={
-                        user.gender === "Male"
-                          ? "bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium"
-                          : "bg-pink-100 text-pink-700 px-2 py-1 rounded-full text-xs font-medium"
-                      }
-                    >
-                      {user.gender}
-                    </span>
+                    {user.gender ? (
+                      <span
+                        className={
+                          user.gender === "Male"
+                            ? "bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium"
+                            : "bg-pink-100 text-pink-700 px-2 py-1 rounded-full text-xs font-medium"
+                        }
+                      >
+                        {user.gender}
+                      </span>
+                    ) : (
+                      "N/A"
+                    )}
                   </TableCell>
-                  <TableCell>{user.dateOfBirth}</TableCell>
+                  <TableCell>{user.dateOfBirth || "N/A"}</TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"

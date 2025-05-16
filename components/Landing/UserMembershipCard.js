@@ -9,7 +9,6 @@ import {
   Check,
   ArrowRight,
   AlertCircle,
-  Calendar,
 } from "lucide-react";
 import {
   collection,
@@ -18,11 +17,16 @@ import {
   getDoc,
   addDoc,
   updateDoc,
-  setDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 
 // Regular User MembershipCard Component
@@ -32,11 +36,9 @@ const UserMembershipCard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [userMembership, setUserMembership] = useState(null);
-  const [processingPayment, setProcessingPayment] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [userData, setUserData] = useState(null);
-
-  console.log("UserMembershipCard component rendering");
 
   // Get user ID from localStorage
   useEffect(() => {
@@ -45,174 +47,89 @@ const UserMembershipCard = () => {
       if (userStr) {
         const parsedUser = JSON.parse(userStr);
         setUserId(parsedUser.email); // Using email as ID
-        setUserData(parsedUser);
-        console.log("User ID set:", parsedUser.email);
       }
     } catch (error) {
       console.error("Auth check failed:", error);
     }
   }, []);
 
-  // Fetch plans regardless of user login status
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
-  // Fetch user membership data if user is logged in
+  // Fetch plans and user membership data
   useEffect(() => {
     if (userId) {
-      fetchUserMembership();
+      fetchData();
+    } else {
+      // If no user is logged in, just fetch plans
+      fetchPlans();
     }
-  }, [userId, plans]);
+  }, [userId]);
 
   const fetchPlans = async () => {
-    console.log("Fetching membership plans...");
     try {
       const plansSnapshot = await getDocs(collection(db, "membershipPlans"));
-
-      if (plansSnapshot.empty) {
-        console.log("No membership plans found in the database");
-        setPlans([]);
-        setLoading(false);
-        return;
-      }
-
       const plansData = plansSnapshot.docs
-        .map((doc) => {
-          console.log("Plan document:", doc.id, doc.data());
-          return {
-            id: doc.id,
-            ...doc.data(),
-          };
-        })
-        .filter((plan) => plan.isActive !== false && plan.active !== false) // Filter active plans
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((plan) => plan.active) // Only show active plans to users
         .sort((a, b) => a.price - b.price); // Sort by price
 
-      console.log("Fetched plans:", plansData.length, plansData);
       setPlans(plansData);
+      setLoading(false);
     } catch (err) {
       console.error("Error fetching plans:", err);
       setError("Failed to load membership plans");
-    } finally {
       setLoading(false);
     }
   };
 
-  const fetchUserMembership = async () => {
-    console.log("Fetching user membership for:", userId);
+  const fetchData = async () => {
     try {
-      const userDoc = await getDoc(doc(db, "users", userId));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData.membershipPlan) {
-          const userPlan = plans.find((p) => p.id === userData.membershipPlan);
+      // Fetch plans
+      const plansSnapshot = await getDocs(collection(db, "membershipPlans"));
+      const plansData = plansSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((plan) => plan.active) // Only show active plans to users
+        .sort((a, b) => a.price - b.price); // Sort by price
+
+      setPlans(plansData);
+
+      // Fetch user membership if userId exists
+      if (userId) {
+        const userDoc = await getDoc(doc(db, "users", userId));
+        if (userDoc.exists() && userDoc.data().membershipPlan) {
+          const userData = userDoc.data();
+          const userPlan = plansData.find(
+            (p) => p.id === userData.membershipPlan
+          );
 
           if (userPlan) {
             setUserMembership({
               ...userData,
               plan: userPlan,
             });
-            console.log("User membership found:", userPlan.title);
           }
         }
-      } else {
-        console.log(
-          "User document doesn't exist in Firestore. Will create it during payment."
-        );
       }
     } catch (err) {
-      console.error("Error fetching user membership:", err);
+      console.error("Error fetching data:", err);
+      setError("Failed to load membership data");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handlePlanSelect = async (plan) => {
+  const handlePlanSelect = (plan) => {
     if (!userId) {
       // Handle user not logged in
       alert("Please log in to select a plan");
       return;
     }
-
-    if (processingPayment) {
-      return; // Prevent multiple clicks
-    }
-
-    try {
-      setProcessingPayment(true);
-
-      // Simulate payment directly without showing a modal
-      console.log("Processing payment for plan:", plan.title);
-
-      // Generate mock payment ID
-      const paymentId = "rzp_test_" + Math.random().toString(36).substr(2, 9);
-
-      // Process the membership purchase
-      await processMembershipPurchase(plan, paymentId);
-
-      // Redirect to success page
-      router.push("/payment-success");
-    } catch (error) {
-      console.error("Payment processing error:", error);
-      setError("Failed to process payment: " + error.message);
-      setProcessingPayment(false);
-    }
-  };
-
-  const processMembershipPurchase = async (plan, paymentId) => {
-    if (!userId) {
-      throw new Error("User not logged in");
-    }
-
-    // Check if user document exists first
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-
-    // Calculate membership dates
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + plan.duration);
-
-    // Prepare membership data
-    const membershipData = {
-      membershipPlan: plan.id,
-      membershipStatus: "active",
-      isPremium: true,
-      membershipStartDate: startDate.toISOString(),
-      membershipEndDate: endDate.toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    console.log("Updating user document with membership data:", membershipData);
-
-    if (userSnap.exists()) {
-      // Update existing user document
-      await updateDoc(userRef, membershipData);
-      console.log("Updated existing user document");
-    } else {
-      // Create new user document
-      const newUserData = {
-        ...userData,
-        email: userId,
-        ...membershipData,
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(userRef, newUserData);
-      console.log("Created new user document with membership data");
-    }
-
-    // Record the payment
-    await addDoc(collection(db, "payments"), {
-      userId,
-      planId: plan.id,
-      planTitle: plan.title,
-      planDuration: plan.duration,
-      amount: plan.price,
-      paymentId: paymentId,
-      status: "success",
-      createdAt: new Date().toISOString(),
-    });
-
-    console.log("Payment recorded successfully");
+    setSelectedPlan(plan);
+    setShowPaymentModal(true);
   };
 
   const getIcon = (iconName) => {
@@ -226,6 +143,162 @@ const UserMembershipCard = () => {
       default:
         return Star;
     }
+  };
+
+  // Payment Modal Component
+  const PaymentModal = ({ isOpen, onClose, plan }) => {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [paymentSettings, setPaymentSettings] = useState(null);
+
+    // Fetch payment settings when modal opens
+    useEffect(() => {
+      if (isOpen) {
+        fetchPaymentSettings();
+      }
+    }, [isOpen]);
+
+    const fetchPaymentSettings = async () => {
+      try {
+        const settingsRef = doc(db, "settings", "payment");
+        const settingsSnap = await getDoc(settingsRef);
+
+        if (settingsSnap.exists()) {
+          const settings = settingsSnap.data();
+          // Check if Razorpay is enabled and key exists
+          if (!settings.razorpay?.enabled || !settings.razorpay?.key) {
+            setError("Payment method is not available");
+            return;
+          }
+          setPaymentSettings(settings);
+        } else {
+          setError("Payment settings not configured");
+        }
+      } catch (err) {
+        console.error("Error fetching payment settings:", err);
+        setError("Failed to load payment settings");
+      }
+    };
+
+    const handlePayment = async () => {
+      try {
+        setLoading(true);
+
+        if (!paymentSettings?.razorpay?.key) {
+          throw new Error("Payment configuration is missing");
+        }
+
+        const options = {
+          key: paymentSettings.razorpay.key,
+          amount: plan.price * 100,
+          currency: "INR",
+          name: "Matrimony Platform",
+          description: `${plan.title} Membership`,
+          handler: async (response) => {
+            await processMembershipPurchase(response);
+          },
+          prefill: {
+            name: "User Name",
+            email: "user@example.com",
+          },
+          theme: {
+            color: "#EC4899",
+          },
+          modal: {
+            ondismiss: () => {
+              setLoading(false);
+            },
+          },
+        };
+
+        const razorpay = new window.Razorpay(options);
+        razorpay.open();
+      } catch (err) {
+        setError(err.message || "Payment failed to initialize");
+        console.error("Payment error:", err);
+        setLoading(false);
+      }
+    };
+
+    const processMembershipPurchase = async (paymentResponse) => {
+      try {
+        if (!userId) {
+          throw new Error("User not logged in");
+        }
+
+        const userRef = doc(db, "users", userId);
+        const endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + plan.duration);
+
+        await updateDoc(userRef, {
+          membershipPlan: plan.id,
+          membershipStatus: "active",
+          membershipStartDate: new Date().toISOString(),
+          membershipEndDate: endDate.toISOString(),
+        });
+
+        await addDoc(collection(db, "payments"), {
+          userId,
+          planId: plan.id,
+          amount: plan.price,
+          paymentId: paymentResponse.razorpay_payment_id,
+          status: "success",
+          createdAt: new Date().toISOString(),
+        });
+
+        // Redirect to success page
+        router.push("/payment-success");
+      } catch (err) {
+        setError("Failed to process payment");
+        console.error("Payment processing error:", err);
+      }
+    };
+
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Upgrade to {plan?.title}</DialogTitle>
+          </DialogHeader>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <div className="p-4">
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between mb-2">
+                  <span>Plan Duration</span>
+                  <span className="font-medium">{plan?.duration} months</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Amount</span>
+                  <span className="font-medium">₹{plan?.price}</span>
+                </div>
+              </div>
+              {paymentSettings?.razorpay?.enabled ? (
+                <Button
+                  className="w-full"
+                  onClick={handlePayment}
+                  disabled={loading}
+                >
+                  {loading ? "Processing..." : "Proceed to Payment"}
+                </Button>
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    Payment system is currently unavailable. Please try again
+                    later.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   };
 
   if (loading) {
@@ -242,39 +315,6 @@ const UserMembershipCard = () => {
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>{error}</AlertDescription>
       </Alert>
-    );
-  }
-
-  // Handle the case where no plans are available
-  if (!plans || plans.length === 0) {
-    return (
-      <div className="relative px-6 pt-24 pb-12 lg:px-8">
-        <div className="max-w-6xl mx-auto text-center py-12">
-          <div className="bg-white rounded-xl shadow-lg p-10">
-            <div className="flex justify-center mb-6">
-              <div className="p-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full">
-                <Calendar className="w-10 h-10 text-white" />
-              </div>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              No membership plans available at the moment
-            </h2>
-            <p className="text-gray-600 mb-8">
-              Our team is currently working on creating valuable membership
-              options for you. Please check back later or contact us for more
-              information.
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Button variant="outline" className="flex items-center gap-2">
-                Contact Support
-              </Button>
-              <Button className="bg-gradient-to-r from-pink-600 to-purple-600 flex items-center gap-2">
-                Get Notified
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
     );
   }
 
@@ -313,28 +353,16 @@ const UserMembershipCard = () => {
         </div>
       )}
 
-      {/* Section Title */}
-      <div className="max-w-6xl mx-auto mb-12 text-center">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-          Choose Your Membership Plan
-        </h2>
-        <p className="mt-4 text-gray-600 max-w-2xl mx-auto">
-          Select the plan that best fits your needs and unlock premium features
-          to enhance your experience.
-        </p>
-      </div>
-
       {/* Plans Grid */}
       <div className="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         {plans.map((plan, index) => {
-          console.log("Rendering plan:", plan.title, plan);
           const Icon = getIcon(plan.icon);
           const isFeatured = plan.featured;
           const isCurrentPlan = userMembership?.plan?.id === plan.id;
 
           return (
             <div
-              key={plan.id || index}
+              key={plan.id}
               className={`
                 relative group flex flex-col
                 bg-white rounded-2xl 
@@ -405,24 +433,13 @@ const UserMembershipCard = () => {
                   }
                     hover:opacity-90 transition-all
                     ${isCurrentPlan ? "opacity-50 cursor-not-allowed" : ""}
-                    ${processingPayment ? "opacity-75 cursor-not-allowed" : ""}
                   `}
-                  onClick={() =>
-                    !isCurrentPlan &&
-                    !processingPayment &&
-                    handlePlanSelect(plan)
-                  }
-                  disabled={isCurrentPlan || processingPayment}
+                  onClick={() => !isCurrentPlan && handlePlanSelect(plan)}
+                  disabled={isCurrentPlan}
                 >
                   <span className="flex items-center gap-2">
-                    {isCurrentPlan
-                      ? "Current Plan"
-                      : processingPayment
-                      ? "Processing..."
-                      : `Choose ${plan.title}`}
-                    {!isCurrentPlan && !processingPayment && (
-                      <ArrowRight className="w-5 h-5" />
-                    )}
+                    {isCurrentPlan ? "Current Plan" : `Choose ${plan.title}`}
+                    {!isCurrentPlan && <ArrowRight className="w-5 h-5" />}
                   </span>
                 </Button>
               </div>
@@ -430,6 +447,13 @@ const UserMembershipCard = () => {
           );
         })}
       </div>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        plan={selectedPlan}
+      />
     </div>
   );
 };

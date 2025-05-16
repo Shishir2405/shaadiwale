@@ -214,7 +214,7 @@ const MobileMenu = ({ isOpen, onClose, user, handleLogout, setShowSignUp }) => (
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}
-        className="fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto"
+        className="fixed inset-0 bg-white z-[1000000] flex flex-col overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6">
@@ -378,7 +378,7 @@ const Navbar = () => {
             initial={{ y: -100 }}
             animate={{ y: 0 }}
             exit={{ y: -100 }}
-            className="fixed top-0 left-0 right-0 bg-white shadow-md z-[10000000]"
+            className="fixed top-0 left-0 right-0 bg-white shadow-md z-[100000]"
           >
             <div className="max-w-7xl mx-auto px-4">
               <div className="flex items-center justify-between h-16">

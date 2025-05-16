@@ -2,14 +2,19 @@
 import { useState, useEffect } from "react";
 import Hero from "@/components/Landing/Slider";
 import MatrimonySplitSection from "@/components/Landing/ImageSection";
-import MembershipCards from "@/components/Landing/MembershipCards";
+import UserMembershipCard from "@/components/Landing/UserMemberCard";
 import JourneySteps from "@/components/Landing/StepsSection";
 import ExclusiveSection from "@/components/Landing/ExclusiveSection";
 import Testimonials from "@/components/Landing/Testimonial";
-import UserMembershipCard from "@/components/Landing/UserMemberCard";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -35,24 +40,42 @@ export default function Home() {
     checkAuth();
   }, []);
 
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "membershipPlans"));
+        const plansData = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log("Fetched plans:", plansData);
+        setPlans(plansData);
+      } catch (error) {
+        console.error("Error fetching plans:", error);
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlans();
+  }, []);
+
   // Debug logs
   console.log("Current userData:", userData);
   console.log("User ID being passed:", userData?.uid);
+  console.log("Plans loaded:", plans.length);
 
   return (
     <>
       <Hero />
       <MatrimonySplitSection />
-      {/* <section className="w-full py-12 bg-gray-50">
-        <MembershipCards
-          userId={userData?.uid}
-          isAdmin={userData?.role === "Verifier"}
-          onEdit={(planId) => {
-            console.log("Edit plan:", planId);
-          }}
-        />
-      </section> */}
-      <UserMembershipCard />
+      <section className="w-full py-12 bg-gray-50">
+        <div className="container mx-auto">
+
+          <UserMembershipCard />
+        </div>
+      </section>
       <JourneySteps />
       <ExclusiveSection />
       <Testimonials />
